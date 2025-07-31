@@ -1,6 +1,16 @@
 {
-    "python-envs.pythonProjects": [],
-    "[python]": {
-    "editor.formatOnSave": false
-}
+  "editor.formatOnSave": false,
+  "editor.codeActionsOnSave": {
+    "source.organizeImports": false,
+    "source.fixAll": false
+  },
+  "[python]": {
+    "editor.defaultFormatter": null,
+    "editor.formatOnSave": false,
+    "editor.codeActionsOnSave": {
+      "source.organizeImports": false,
+      "source.fixAll": false
+    }
+  },
+  "ruff.lint.fixOnSave": false
 }

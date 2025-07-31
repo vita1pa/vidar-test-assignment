@@ -1,0 +1,18 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug pipeline ingest-data",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pipeline",
+      "console": "integratedTerminal",
+      "args": [
+        "ingest-data",
+        "--metadata_xml", "data/Angebotsbeschreibung.xml",
+        "--output", "test_data/audio_files",
+        "--db", "test_data/metadata.db"
+      ]
+    }
+  ]
+}

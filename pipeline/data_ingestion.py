@@ -1,10 +1,10 @@
-import os
 import sqlite3
 import xml.etree.ElementTree as ET
 
 import click
 import mlflow
-from utils.mlflow_tracking import init_mlflow
+from .utils.mlflow_tracking import init_mlflow
+from .cli import cli
 
 
 def parse_xml_metadata(xml_file):
@@ -64,28 +64,26 @@ def create_or_update_sqlite_db(metadata, db_path):
         raise click.ClickException(f"Failed to update SQLite DB: {e}")
 
 
-def download_dataset(url, output_dir):
-    """Download dataset from URL to output directory."""
-    try:
-        os.makedirs(output_dir, exist_ok=True)
-        # Placeholder: Implement actual download logic
-        click.echo(f"Downloading dataset from {url} to {output_dir}")
-        # Example: requests.get(url) to download files
-    except Exception as e:
-        mlflow.log_metric("download_errors", 1)
-        raise click.ClickException(f"Failed to download dataset: {e}")
+# def download_dataset(url, output_dir):
+#     """Download dataset from URL to output directory."""
+#     try:
+#         os.makedirs(output_dir, exist_ok=True)
+#         # Placeholder: Implement actual download logic
+#         click.echo(f"Downloading dataset from {url} to {output_dir}")
+#         # Example: requests.get(url) to download files
+#     except Exception as e:
+#         mlflow.log_metric("download_errors", 1)
+#         raise click.ClickException(f"Failed to download dataset: {e}")
 
 
-@click.command()
+@cli.command()
 @click.option("--metadata_xml", type=click.Path(exists=True), required=True, help="Path to Angebotsbeschreibung.xml")
-@click.option("--url", required=True, help="Dataset URL")
 @click.option("--output", default="data/audio_files", type=click.Path(), help="Output directory for audio files")
 @click.option("--db", default="data/metadata.db", type=click.Path(), help="SQLite database path")
-def ingest_data(metadata_xml, url, output, db):
+def ingest_data(metadata_xml, output, db):
     """Ingest dataset and create/update SQLite database."""
     init_mlflow()
     with mlflow.start_run():
-        download_dataset(url, output)
         metadata = parse_xml_metadata(metadata_xml)
         create_or_update_sqlite_db(metadata, db)
         click.echo(f"Successfully ingested dataset to {output} and created/updated {db}")
