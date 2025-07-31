@@ -1,0 +1,6 @@
+outs:
+- md5: b828ec2eb129ebc78c083bdd20011005.dir
+  size: 1994595350
+  nfiles: 798
+  hash: md5
+  path: xml_input

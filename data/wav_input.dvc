@@ -1,0 +1,6 @@
+outs:
+- md5: 19192aadc39d7be3051824bf6708ccbc.dir
+  size: 654875548
+  nfiles: 22
+  hash: md5
+  path: wav_input
