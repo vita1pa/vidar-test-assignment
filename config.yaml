@@ -8,3 +8,6 @@ labels_path: "labels"
 target_sr: 16000
 filter_cutoff: 20
 concat_duration: 1800  # 30min in seconds
+mlflow:
+  tracking_uri: "sqlite:///mlruns/mlruns.db"
+  experiment_name: "audrok_pipeline"

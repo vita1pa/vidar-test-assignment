@@ -4,6 +4,7 @@ import xml.etree.ElementTree as ET
 
 import click
 import mlflow
+from utils.mlflow_tracking import init_mlflow
 
 
 def parse_xml_metadata(xml_file):
@@ -82,6 +83,7 @@ def download_dataset(url, output_dir):
 @click.option("--db", default="data/metadata.db", type=click.Path(), help="SQLite database path")
 def ingest_data(metadata_xml, url, output, db):
     """Ingest dataset and create/update SQLite database."""
+    init_mlflow()
     with mlflow.start_run():
         download_dataset(url, output)
         metadata = parse_xml_metadata(metadata_xml)
