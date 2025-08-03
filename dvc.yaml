@@ -51,7 +51,20 @@ stages:
       --tolerance 180
     deps:
     - data/processed/filtered_outdoor_wav
+    - data/processed/wav_sound_metadata/wav_metadata.csv
     - pipeline/concatenate_into_segments.py
     outs:
     - data/processed/concatenated_wav_segments
+
+  preparing_recording_positions:
+    cmd: python -m pipeline generate-labels 
+      --input-folder data/processed/concatenated_wav_segments
+      --output-folder labels/recording_positions
+      --metadata-path data/processed/wav_sound_metadata/wav_metadata.csv
+    deps:
+    - data/processed/concatenated_wav_segments
+    - data/processed/wav_sound_metadata/wav_metadata.csv
+    - pipeline/prepare_recording_positions.py
+    outs:
+    - labels/recording_positions
 
