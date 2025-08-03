@@ -7,3 +7,14 @@ stages:
     - pipeline/decode_xml_to_wav.py
     outs:
     - data/processed/extracted_wav
+
+  downsampling_audio:
+    cmd: python -m pipeline downsample-audio --input-folder data/processed/extracted_wav 
+      --output-folder data/processed/downsampled_wav
+      --target-sr 16000
+    deps:
+    - data/processed/extracted_wav 
+    - pipeline/downsample_wav.py
+    outs:
+    - data/processed/downsampled_wav
+

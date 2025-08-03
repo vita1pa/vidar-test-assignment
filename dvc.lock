@@ -11,11 +11,31 @@ stages:
       nfiles: 798
     - path: pipeline/decode_xml_to_wav.py
       hash: md5
-      md5: 4f8428b37c55a129689e3c7991079c6b
-      size: 4127
+      md5: 54a958b63b16fdbfab27af732dfd913a
+      size: 4203
     outs:
     - path: data/processed/extracted_wav
       hash: md5
       md5: 6f74e7fc9024c13a9a62be8f7e4c709c.dir
       size: 1495633892
+      nfiles: 798
+  downsampling_audio:
+    cmd: python -m pipeline downsample-audio --input-folder 
+      data/processed/extracted_wav --output-folder 
+      data/processed/downsampled_wav --target-sr 16000
+    deps:
+    - path: data/processed/extracted_wav
+      hash: md5
+      md5: 6f74e7fc9024c13a9a62be8f7e4c709c.dir
+      size: 1495633892
+      nfiles: 798
+    - path: pipeline/downsample_wav.py
+      hash: md5
+      md5: 59d50b58b86706f1c4c8794465ea6fab
+      size: 4407
+    outs:
+    - path: data/processed/downsampled_wav
+      hash: md5
+      md5: 4666349f9a47b9beb8c246412a5e6ba6.dir
+      size: 271346322
       nfiles: 798

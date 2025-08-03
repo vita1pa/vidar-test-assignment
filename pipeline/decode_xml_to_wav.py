@@ -76,6 +76,7 @@ def decode_wav_from_xml(xml_file_path, output_wav_path):
 @click.option("--output-folder", type=click.Path(), default="test_data/extracted_wav",
               help="Output directory for WAV files")
 def process_xml_files(input_folder, output_folder):
+    """Decode WAV files from XML and save them to the output directory."""
     # Initialize MLflow tracking
     init_mlflow()    
     # Create output directory if it doesn't exist
