@@ -39,3 +39,23 @@ stages:
       md5: 4666349f9a47b9beb8c246412a5e6ba6.dir
       size: 271346322
       nfiles: 798
+  filtering_outdoor:
+    cmd: python -m pipeline highpass-filter --input-folder 
+      data/processed/downsampled_wav --output-folder 
+      data/processed/filtered_outdoor_wav --cutoff-freq 20 --sample-rate 16000
+    deps:
+    - path: data/processed/downsampled_wav
+      hash: md5
+      md5: 4666349f9a47b9beb8c246412a5e6ba6.dir
+      size: 271346322
+      nfiles: 798
+    - path: pipeline/filter_outdoor.py
+      hash: md5
+      md5: 1d6336969173511d5a77556fa1ba221f
+      size: 7662
+    outs:
+    - path: data/processed/filtered_outdoor_wav
+      hash: md5
+      md5: cc7cf83a5c0fa06954cce4858715545f.dir
+      size: 271346322
+      nfiles: 798

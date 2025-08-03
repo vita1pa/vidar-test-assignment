@@ -18,3 +18,14 @@ stages:
     outs:
     - data/processed/downsampled_wav
 
+  filtering_outdoor:
+    cmd: python -m pipeline highpass-filter --input-folder data/processed/downsampled_wav
+      --output-folder data/processed/filtered_outdoor_wav
+      --cutoff-freq 20
+      --sample-rate 16000
+    deps:
+    - data/processed/downsampled_wav
+    - pipeline/filter_outdoor.py
+    outs:
+    - data/processed/filtered_outdoor_wav
+
