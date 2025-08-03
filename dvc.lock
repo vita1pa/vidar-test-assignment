@@ -1,0 +1,21 @@
+schema: '2.0'
+stages:
+  decoding_xml_to_wav:
+    cmd: python -m pipeline process-xml-files --input-folder data/xml_input 
+      --output-folder data/processed/extracted_wav
+    deps:
+    - path: data/xml_input
+      hash: md5
+      md5: b828ec2eb129ebc78c083bdd20011005.dir
+      size: 1994595350
+      nfiles: 798
+    - path: pipeline/decode_xml_to_wav.py
+      hash: md5
+      md5: 4f8428b37c55a129689e3c7991079c6b
+      size: 4127
+    outs:
+    - path: data/processed/extracted_wav
+      hash: md5
+      md5: 6f74e7fc9024c13a9a62be8f7e4c709c.dir
+      size: 1495633892
+      nfiles: 798

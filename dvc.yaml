@@ -1,0 +1,9 @@
+stages:
+  decoding_xml_to_wav:
+    cmd: python -m pipeline process-xml-files --input-folder data/xml_input 
+      --output-folder data/processed/extracted_wav
+    deps:
+    - data/xml_input
+    - pipeline/decode_xml_to_wav.py
+    outs:
+    - data/processed/extracted_wav
