@@ -129,3 +129,43 @@ stages:
       md5: 57f105befe7ec3fff1a8e4f368b45f16.dir
       size: 37415
       nfiles: 5
+  getting_speech_probabilities:
+    cmd: python -m pipeline detect-speech --input-folder 
+      data/processed/concatenated_wav_segments --output-folder 
+      data/processed/speech_detection_probabilities
+    deps:
+    - path: data/processed/concatenated_wav_segments
+      hash: md5
+      md5: 2826f8f7e1e6a4189605f65ebb22c1ca.dir
+      size: 271311430
+      nfiles: 5
+    - path: pipeline/get_speech_probabilities.py
+      hash: md5
+      md5: 3f739f9c1f9e0e411ca8bffd5e6d9617
+      size: 5135
+    outs:
+    - path: data/processed/speech_detection_probabilities
+      hash: md5
+      md5: 178d12c94df50ff3f13ba8c3813830d9.dir
+      size: 9696984
+      nfiles: 5
+  preparing_speech_labels:
+    cmd: python -m pipeline label-speech --input-folder 
+      data/processed/speech_detection_probabilities --output-folder 
+      labels/speech_detection --threshold 0.5
+    deps:
+    - path: data/processed/speech_detection_probabilities
+      hash: md5
+      md5: 178d12c94df50ff3f13ba8c3813830d9.dir
+      size: 9696984
+      nfiles: 5
+    - path: pipeline/prepare_speech_labels.py
+      hash: md5
+      md5: b00f517fa22cd8aa63bf06e90396a294
+      size: 5390
+    outs:
+    - path: labels/speech_detection
+      hash: md5
+      md5: 73f8472bdae3855cd994ce140d816a06.dir
+      size: 1742
+      nfiles: 5

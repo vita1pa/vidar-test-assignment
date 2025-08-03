@@ -68,3 +68,24 @@ stages:
     outs:
     - labels/recording_positions
 
+  getting_speech_probabilities:
+    cmd: python -m pipeline detect-speech
+      --input-folder data/processed/concatenated_wav_segments
+      --output-folder data/processed/speech_detection_probabilities
+    deps:
+    - data/processed/concatenated_wav_segments
+    - pipeline/get_speech_probabilities.py
+    outs:
+    - data/processed/speech_detection_probabilities
+
+  preparing_speech_labels:
+    cmd: python -m pipeline label-speech
+      --input-folder data/processed/speech_detection_probabilities
+      --output-folder labels/speech_detection
+      --threshold 0.5
+    deps:
+    - data/processed/speech_detection_probabilities
+    - pipeline/prepare_speech_labels.py
+    outs:
+    - labels/speech_detection
+
