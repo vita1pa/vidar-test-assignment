@@ -1,6 +1,7 @@
 stages:
   decoding_xml_to_wav:
-    cmd: python -m pipeline process-xml-files --input-folder data/xml_input 
+    cmd: python -m pipeline process-xml-files 
+      --input-folder data/xml_input 
       --output-folder data/processed/extracted_wav
     deps:
     - data/xml_input
@@ -9,7 +10,8 @@ stages:
     - data/processed/extracted_wav
 
   downsampling_audio:
-    cmd: python -m pipeline downsample-audio --input-folder data/processed/extracted_wav 
+    cmd: python -m pipeline downsample-audio 
+      --input-folder data/processed/extracted_wav 
       --output-folder data/processed/downsampled_wav
       --target-sr 16000
     deps:
@@ -19,7 +21,8 @@ stages:
     - data/processed/downsampled_wav
 
   filtering_outdoor:
-    cmd: python -m pipeline highpass-filter --input-folder data/processed/downsampled_wav
+    cmd: python -m pipeline highpass-filter 
+      --input-folder data/processed/downsampled_wav
       --output-folder data/processed/filtered_outdoor_wav
       --cutoff-freq 20
       --sample-rate 16000
@@ -28,4 +31,27 @@ stages:
     - pipeline/filter_outdoor.py
     outs:
     - data/processed/filtered_outdoor_wav
+
+  extracting_sound_data:
+    cmd: python -m pipeline analyze-wav-files
+      --input-folder data/processed/filtered_outdoor_wav
+      --output-folder data/processed/wav_sound_metadata
+    deps:
+    - data/processed/filtered_outdoor_wav
+    - pipeline/extract_sound_data_from_wav.py
+    outs:
+    - data/processed/wav_sound_metadata/wav_metadata.csv
+
+  concatenating_segments:
+    cmd: python -m pipeline concatenate-audio 
+      --input-folder data/processed/filtered_outdoor_wav
+      --output-folder data/processed/concatenated_wav_segments
+      --metadata-path data/processed/wav_sound_metadata/wav_metadata.csv
+      --target-duration 1800
+      --tolerance 180
+    deps:
+    - data/processed/filtered_outdoor_wav
+    - pipeline/concatenate_into_segments.py
+    outs:
+    - data/processed/concatenated_wav_segments
 

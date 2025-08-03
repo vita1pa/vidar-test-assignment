@@ -59,3 +59,44 @@ stages:
       md5: cc7cf83a5c0fa06954cce4858715545f.dir
       size: 271346322
       nfiles: 798
+  extracting_sound_data:
+    cmd: python -m pipeline analyze-wav-files --input-folder 
+      data/processed/filtered_outdoor_wav --output-folder 
+      data/processed/wav_sound_metadata
+    deps:
+    - path: data/processed/filtered_outdoor_wav
+      hash: md5
+      md5: cc7cf83a5c0fa06954cce4858715545f.dir
+      size: 271346322
+      nfiles: 798
+    - path: pipeline/extract_sound_data_from_wav.py
+      hash: md5
+      md5: a1595e81c24ce06be6d651dd5001ad85
+      size: 3811
+    outs:
+    - path: data/processed/wav_sound_metadata/wav_metadata.csv
+      hash: md5
+      md5: ccc38956aa1c0b2ce960b4729bd2d688
+      size: 45908
+  concatenating_segments:
+    cmd: python -m pipeline concatenate-audio --input-folder 
+      data/processed/filtered_outdoor_wav --output-folder 
+      data/processed/concatenated_wav_segments --metadata-path 
+      data/processed/wav_sound_metadata/wav_metadata.csv --target-duration 1800 
+      --tolerance 180
+    deps:
+    - path: data/processed/filtered_outdoor_wav
+      hash: md5
+      md5: cc7cf83a5c0fa06954cce4858715545f.dir
+      size: 271346322
+      nfiles: 798
+    - path: pipeline/concatenate_into_segments.py
+      hash: md5
+      md5: ea1a10212390d4ce1ae3baef38932c52
+      size: 6480
+    outs:
+    - path: data/processed/concatenated_wav_segments
+      hash: md5
+      md5: 2826f8f7e1e6a4189605f65ebb22c1ca.dir
+      size: 271311430
+      nfiles: 5
