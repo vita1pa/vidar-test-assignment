@@ -14,6 +14,13 @@ from mlflow.tracking import MlflowClient
 from datetime import datetime
 from .cli import cli
 import dvc.api
+from .utils.logger import setup_logger
+from .utils.constants import LOG_STORAGE_PATH
+
+logger = setup_logger(
+    name=__name__,
+    log_file=LOG_STORAGE_PATH,
+)
 
 
 # Configure logging

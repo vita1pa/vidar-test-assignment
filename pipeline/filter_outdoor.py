@@ -18,10 +18,13 @@ import mlflow
 from datetime import datetime
 from .cli import cli
 import dvc.api
+from .utils.logger import setup_logger
+from .utils.constants import LOG_STORAGE_PATH
 
-# Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
+logger = setup_logger(
+    name=__name__,
+    log_file=LOG_STORAGE_PATH,
+)
 
 class AudioHighPassFilter:
     def __init__(self, input_folder, output_folder, 

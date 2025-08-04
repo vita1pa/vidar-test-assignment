@@ -14,10 +14,13 @@ from mlflow.tracking import MlflowClient
 from datetime import datetime
 from .cli import cli
 import logging
+from .utils.logger import setup_logger
+from .utils.constants import LOG_STORAGE_PATH
 
-# Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
+logger = setup_logger(
+    name=__name__,
+    log_file=LOG_STORAGE_PATH,
+)
 
 def analyze_wav(file_path, client: MlflowClient, run_id: str):
     # Analyze a single WAV file and extract metadata

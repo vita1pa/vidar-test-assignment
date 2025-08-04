@@ -49,10 +49,10 @@ def terminate_run(client: MlflowClient, run_id: str, status="FINISHED"):
 
 def main():
 
-    # Подключаемся к клиенту
+    # Connect to client
     client = get_mlflow_client()
 
-    # Создаем и сохраняем parent run
+    # Create and save parent run
     parent_run_id = create_and_save_parent_run(client)
     print(f"Created parent run with ID: {parent_run_id}")
 
