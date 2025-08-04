@@ -4,11 +4,23 @@ import soundfile as sf
 from pathlib import Path
 import logging
 import click
-import mlflow
-from .utils.mlflow_tracking import init_mlflow
+from .utils.mlflow_tracking import (
+    get_mlflow_client, 
+    load_parent_run_id,
+    create_child_run,
+    terminate_run
+)
+from mlflow.tracking import MlflowClient
 from datetime import datetime
 from .cli import cli
 import dvc.api
+from .utils.logger import setup_logger
+from .utils.constants import LOG_STORAGE_PATH
+
+logger = setup_logger(
+    name=__name__,
+    log_file=LOG_STORAGE_PATH,
+)
 
 
 # Configure logging
@@ -16,17 +28,19 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 class AudioDownsampler:
-    def __init__(self, input_folder, output_folder, target_sr=16000):
+    def __init__(self, input_folder, output_folder,
+                 client: MlflowClient, run_id: str, 
+                 target_sr=16000,):
         # Initialize with input/output folders and target sampling rate
         self.input_folder = Path(input_folder)
         self.output_folder = Path(output_folder)
         self.target_sr = target_sr
         self.output_folder.mkdir(exist_ok=True)  # Create output folder if it doesn't exist
-        
-        # Log initialization parameters
-        mlflow.log_param("input_folder", str(input_folder))
-        mlflow.log_param("output_folder", str(output_folder))
-        mlflow.log_param("target_sampling_rate", target_sr)
+        self.client = client
+        self.run_id = run_id
+
+        # Log target sampling rate
+        self.client.log_metric(run_id=self.run_id, key="target_sampling_rate", value=target_sr)
 
     def downsample_file(self, file_path):
         # Process a single WAV file by downsampling
@@ -49,7 +63,7 @@ class AudioDownsampler:
             # Calculate processing time and audio duration
             processing_time = (datetime.now() - start_time).total_seconds()
             audio_duration = len(audio) / sr
-            mlflow.log_metric(f"processing_time_{file_path.name}", processing_time)
+            self.client.log_metric(run_id=self.run_id, key=f"processing_time_{file_path.name}", value=processing_time)
 
             return {
                 'filename': file_path.name,
@@ -60,7 +74,7 @@ class AudioDownsampler:
 
         except Exception as e:
             logger.error(f"Error processing file {file_path}: {e}")
-            mlflow.log_metric("downsample_errors", 1)
+            self.client.log_metric(run_id=self.run_id, key="downsample_errors", value=1)
             return None
 
     def process_folder(self):
@@ -74,9 +88,9 @@ class AudioDownsampler:
                 results.append(result)
         
         # Log total files processed and success rate
-        mlflow.log_metric("total_files_processed", total_files)
+        self.client.log_metric(run_id=self.run_id, key="total_files_processed", value=total_files)
         success_rate = len(results) / total_files if total_files > 0 else 0
-        mlflow.log_metric("success_rate", success_rate)
+        self.client.log_metric(run_id=self.run_id, key="success_rate", value=success_rate)
         
         return results
 
@@ -87,26 +101,39 @@ class AudioDownsampler:
               help="Output directory for downsampled WAV files")
 def downsample_audio(input_folder, output_folder):
     """Downsample WAV files in the input folder to the target sampling rate."""
-    # Initialize MLflow tracking
-    init_mlflow()
+    # Connect to MLflow client
+    client = get_mlflow_client()  
 
-    # Fetch target sampling rate from DVC parameters
-    params = dvc.api.params_show()
-    target_sr = params.get("target_sr")  # Fallback to 16000 if not found
-    print(f"Target sampling rate: {target_sr} Hz")
-    
-    # Initialize downsampler and process files
-    downsampler = AudioDownsampler(input_folder, output_folder, target_sr)
-    results = downsampler.process_folder()
+    # Load parent run_id
+    parent_run_id = load_parent_run_id()
 
-    # Print results
-    for result in results:
-        click.echo(f"File: {result['filename']}")
-        click.echo(f"  Original sampling rate: {result['original_sr']} Hz")
-        click.echo(f"  Downsampled rate: {result['downsampled_sr']} Hz")
-        click.echo(f"  Saved to: {result['output_path']}")
-    
-    click.echo(f"Processing complete. {len(results)} files downsampled successfully.")
+    try:
+        # Create child run for this stage
+        child_run_id = create_child_run(client, parent_run_id, "downsampling_audio")
+
+        # Fetch target sampling rate from DVC parameters
+        params = dvc.api.params_show()
+        target_sr = params.get("target_sr")  # Fallback to 16000 if not found
+        print(f"Target sampling rate: {target_sr} Hz")
+        
+        # Initialize downsampler and process files
+        downsampler = AudioDownsampler(input_folder, output_folder,
+                                       client, child_run_id, target_sr)
+        results = downsampler.process_folder()
+
+        # Print results
+        for result in results:
+            click.echo(f"File: {result['filename']}")
+            click.echo(f"  Original sampling rate: {result['original_sr']} Hz")
+            click.echo(f"  Downsampled rate: {result['downsampled_sr']} Hz")
+            click.echo(f"  Saved to: {result['output_path']}")
+        
+        click.echo(f"Processing complete. {len(results)} files downsampled successfully.")
+    except Exception as e:
+        raise RuntimeError(f"An error occurred: {e}")
+    finally:
+        # Terminate child run
+        terminate_run(client, child_run_id)
 
 if __name__ == "__main__":
     cli()
