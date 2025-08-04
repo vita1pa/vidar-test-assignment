@@ -9,6 +9,7 @@ import click
 import mlflow
 from .cli import cli
 from .utils.mlflow_tracking import init_mlflow
+import dvc.api
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -128,14 +129,18 @@ class AudioConcatenator:
               help="Output directory for concatenated WAV segments")
 @click.option("--metadata-path", type=click.Path(exists=True), required=True,
               help="Path to CSV file with metadata")
-@click.option("--target-duration", type=int, default=1800,
-              help="Target duration for each segment in seconds (default: 1800)")
-@click.option("--tolerance", type=int, default=180,
-              help="Tolerance for segment duration in seconds (default: 180)")
-def concatenate_audio(input_folder, output_folder, metadata_path, target_duration, tolerance):
+def concatenate_audio(input_folder, output_folder, metadata_path):
     """Concatenate WAV files into segments based on target duration and metadata."""
     # Initialize MLflow tracking
     init_mlflow()
+
+    # Fetch parameters from DVC
+    params = dvc.api.params_show()
+    target_duration = params["concat_duration"]
+    tolerance = params["concat_tolerance"]
+    
+    print(f"Target duration: {target_duration} seconds")
+    print(f"Tolerance: {tolerance} seconds")
     
     # Initialize concatenator and process files
     concatenator = AudioConcatenator(input_folder, output_folder, metadata_path, target_duration, tolerance)

@@ -13,19 +13,21 @@ stages:
     cmd: python -m pipeline downsample-audio 
       --input-folder data/processed/extracted_wav 
       --output-folder data/processed/downsampled_wav
-      --target-sr 16000
     deps:
-    - data/processed/extracted_wav 
-    - pipeline/downsample_wav.py
+      - data/processed/extracted_wav
+      - pipeline/downsample_wav.py
     outs:
-    - data/processed/downsampled_wav
+      - data/processed/downsampled_wav
+    params:
+      - target_sr
 
   filtering_outdoor:
     cmd: python -m pipeline highpass-filter 
       --input-folder data/processed/downsampled_wav
       --output-folder data/processed/filtered_outdoor_wav
-      --cutoff-freq 20
-      --sample-rate 16000
+    params:
+      - cutoff_freq
+      - target_sr
     deps:
     - data/processed/downsampled_wav
     - pipeline/filter_outdoor.py
@@ -47,8 +49,9 @@ stages:
       --input-folder data/processed/filtered_outdoor_wav
       --output-folder data/processed/concatenated_wav_segments
       --metadata-path data/processed/wav_sound_metadata/wav_metadata.csv
-      --target-duration 1800
-      --tolerance 180
+    params:
+      - concat_duration
+      - concat_tolerance
     deps:
     - data/processed/filtered_outdoor_wav
     - data/processed/wav_sound_metadata/wav_metadata.csv
@@ -82,7 +85,9 @@ stages:
     cmd: python -m pipeline label-speech
       --input-folder data/processed/speech_detection_probabilities
       --output-folder labels/speech_detection
-      --threshold 0.5
+    params:
+      - prob_threshold
+      - frame_step
     deps:
     - data/processed/speech_detection_probabilities
     - pipeline/prepare_speech_labels.py

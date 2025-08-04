@@ -8,6 +8,7 @@ import mlflow
 from .utils.mlflow_tracking import init_mlflow
 from datetime import datetime
 from .cli import cli
+import dvc.api
 
 
 # Configure logging
@@ -84,12 +85,15 @@ class AudioDownsampler:
               help="Path to folder containing WAV files")
 @click.option("--output-folder", type=click.Path(), default="test_data/downsampled_wav",
               help="Output directory for downsampled WAV files")
-@click.option("--target-sr", type=int, default=16000,
-              help="Target sampling rate for downsampling (in Hz)")
-def downsample_audio(input_folder, output_folder, target_sr):
+def downsample_audio(input_folder, output_folder):
     """Downsample WAV files in the input folder to the target sampling rate."""
     # Initialize MLflow tracking
-    init_mlflow()   
+    init_mlflow()
+
+    # Fetch target sampling rate from DVC parameters
+    params = dvc.api.params_show()
+    target_sr = params.get("target_sr")  # Fallback to 16000 if not found
+    print(f"Target sampling rate: {target_sr} Hz")
     
     # Initialize downsampler and process files
     downsampler = AudioDownsampler(input_folder, output_folder, target_sr)
@@ -105,4 +109,4 @@ def downsample_audio(input_folder, output_folder, target_sr):
     click.echo(f"Processing complete. {len(results)} files downsampled successfully.")
 
 if __name__ == "__main__":
-    downsample_audio()
+    cli()

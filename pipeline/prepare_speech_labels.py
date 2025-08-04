@@ -7,6 +7,7 @@ import click
 import mlflow
 from .cli import cli
 from .utils.mlflow_tracking import init_mlflow
+import dvc.api
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', filename='speech_labeling.log', filemode='w')
@@ -103,14 +104,18 @@ class SpeechLabeler:
               help="Path to folder containing speech probability JSON files")
 @click.option("--output-folder", type=click.Path(), default="labels/speech_detection",
               help="Output directory for label files")
-@click.option("--threshold", type=float, default=0.5,
-              help="Probability threshold for speech detection (default: 0.5)")
-@click.option("--frame-step", type=float, default=512/16000,
-              help="Time step between frames in seconds (default: 512/16000)")
-def label_speech(input_folder, output_folder, threshold, frame_step):
+def label_speech(input_folder, output_folder):
     """Generate speech labels from probability JSON files."""
     # Initialize MLflow tracking
     init_mlflow()
+
+    # Fetch parameters from DVC
+    params = dvc.api.params_show()
+    threshold = params["prob_threshold"]
+    frame_step = params["frame_step"]
+    
+    print(f"Probability threshold: {threshold}")
+    print(f"Frame step: {frame_step} seconds")
     
     # Initialize labeler and process files
     labeler = SpeechLabeler(input_folder, output_folder, threshold, frame_step)

@@ -11,6 +11,7 @@ import mlflow
 from datetime import datetime
 from .cli import cli
 from .utils.mlflow_tracking import init_mlflow
+import dvc.api
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -136,16 +137,20 @@ class AudioHighPassFilter:
               help="Path to folder containing WAV files")
 @click.option("--output-folder", type=click.Path(), default="test_data/filtered_wav",
               help="Output directory for filtered WAV files")
-@click.option("--cutoff-freq", type=int, default=20,
-              help="Cutoff frequency for high-pass filter (in Hz)")
-@click.option("--sample-rate", type=int, default=16000,
-              help="Target sampling rate for audio files (in Hz)")
 @click.option("--plot-spectrogram", is_flag=True, default=False,
               help="Generate spectrograms for the first file")
-def highpass_filter(input_folder, output_folder, cutoff_freq, sample_rate, plot_spectrogram):
+def highpass_filter(input_folder, output_folder, plot_spectrogram):
     """Apply high-pass filter to WAV files and optionally generate spectrograms."""
     # Initialize MLflow tracking
     init_mlflow()
+
+    # Fetch parameters from DVC
+    params = dvc.api.params_show()
+    cutoff_freq = params["cutoff_freq"]  # No fallback, assume it's defined in params.yaml
+    sample_rate = params["target_sr"]    # No fallback, assume it's defined in params.yaml
+    
+    print(f"Cutoff frequency: {cutoff_freq} Hz")
+    print(f"Sample rate: {sample_rate} Hz")
     
     # Initialize high-pass filter and process files
     highpass_filter = AudioHighPassFilter(input_folder, output_folder, cutoff_freq, sample_rate)

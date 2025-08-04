@@ -1,0 +1,9 @@
+target_sr: 16000
+cutoff_freq: 20
+concat_duration: 1800  # 30min in seconds
+concat_tolerance: 180
+prob_threshold: 0.5
+frame_step: 0.01
+mlflow:
+  tracking_uri: "sqlite:///mlruns/mlruns.db"
+  experiment_name: "audrok_pipeline"

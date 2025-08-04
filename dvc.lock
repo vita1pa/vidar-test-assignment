@@ -22,7 +22,7 @@ stages:
   downsampling_audio:
     cmd: python -m pipeline downsample-audio --input-folder 
       data/processed/extracted_wav --output-folder 
-      data/processed/downsampled_wav --target-sr 16000
+      data/processed/downsampled_wav
     deps:
     - path: data/processed/extracted_wav
       hash: md5
@@ -31,8 +31,11 @@ stages:
       nfiles: 798
     - path: pipeline/downsample_wav.py
       hash: md5
-      md5: 59d50b58b86706f1c4c8794465ea6fab
-      size: 4407
+      md5: a045c1928c45bb750050cdc1b6852c06
+      size: 4491
+    params:
+      params.yaml:
+        target_sr: 16000
     outs:
     - path: data/processed/downsampled_wav
       hash: md5
@@ -42,7 +45,7 @@ stages:
   filtering_outdoor:
     cmd: python -m pipeline highpass-filter --input-folder 
       data/processed/downsampled_wav --output-folder 
-      data/processed/filtered_outdoor_wav --cutoff-freq 20 --sample-rate 16000
+      data/processed/filtered_outdoor_wav
     deps:
     - path: data/processed/downsampled_wav
       hash: md5
@@ -51,8 +54,12 @@ stages:
       nfiles: 798
     - path: pipeline/filter_outdoor.py
       hash: md5
-      md5: 1d6336969173511d5a77556fa1ba221f
-      size: 7662
+      md5: 20be4b347e99f43022c02d002031d7a9
+      size: 7760
+    params:
+      params.yaml:
+        cutoff_freq: 20
+        target_sr: 16000
     outs:
     - path: data/processed/filtered_outdoor_wav
       hash: md5
@@ -82,8 +89,7 @@ stages:
     cmd: python -m pipeline concatenate-audio --input-folder 
       data/processed/filtered_outdoor_wav --output-folder 
       data/processed/concatenated_wav_segments --metadata-path 
-      data/processed/wav_sound_metadata/wav_metadata.csv --target-duration 1800 
-      --tolerance 180
+      data/processed/wav_sound_metadata/wav_metadata.csv
     deps:
     - path: data/processed/filtered_outdoor_wav
       hash: md5
@@ -96,8 +102,12 @@ stages:
       size: 45908
     - path: pipeline/concatenate_into_segments.py
       hash: md5
-      md5: ea1a10212390d4ce1ae3baef38932c52
-      size: 6480
+      md5: c2950cd2ca09ce8649fd3f07b6147192
+      size: 6466
+    params:
+      params.yaml:
+        concat_duration: 1800
+        concat_tolerance: 180
     outs:
     - path: data/processed/concatenated_wav_segments
       hash: md5
@@ -152,7 +162,7 @@ stages:
   preparing_speech_labels:
     cmd: python -m pipeline label-speech --input-folder 
       data/processed/speech_detection_probabilities --output-folder 
-      labels/speech_detection --threshold 0.5
+      labels/speech_detection
     deps:
     - path: data/processed/speech_detection_probabilities
       hash: md5
@@ -161,11 +171,15 @@ stages:
       nfiles: 5
     - path: pipeline/prepare_speech_labels.py
       hash: md5
-      md5: b00f517fa22cd8aa63bf06e90396a294
-      size: 5390
+      md5: f1d9e432292531658443d408e6083b33
+      size: 5361
+    params:
+      params.yaml:
+        frame_step: 0.01
+        prob_threshold: 0.5
     outs:
     - path: labels/speech_detection
       hash: md5
-      md5: 73f8472bdae3855cd994ce140d816a06.dir
-      size: 1742
+      md5: 4b6a545b94162424bfdbb218c2da5357.dir
+      size: 1682
       nfiles: 5

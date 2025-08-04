@@ -1,6 +1,5 @@
 from pipeline import (
     cli, 
-    data_ingestion, 
     decode_xml_to_wav,
     downsample_wav,
     filter_outdoor,
