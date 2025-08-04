@@ -1,0 +1,1 @@
+LOG_STORAGE_PATH = "logs/processing_logs.log"

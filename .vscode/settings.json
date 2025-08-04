@@ -1,15 +1,15 @@
 {
   "editor.formatOnSave": false,
   "editor.codeActionsOnSave": {
-    "source.organizeImports": false,
-    "source.fixAll": false
+    "source.organizeImports": "never",
+    "source.fixAll": "never"
   },
   "[python]": {
     "editor.defaultFormatter": null,
     "editor.formatOnSave": false,
     "editor.codeActionsOnSave": {
-      "source.organizeImports": false,
-      "source.fixAll": false
+      "source.organizeImports": "never",
+      "source.fixAll": "never"
     }
   },
   "ruff.lint.fixOnSave": false
