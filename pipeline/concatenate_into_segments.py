@@ -6,9 +6,14 @@ import soundfile as sf
 from pathlib import Path
 import logging
 import click
-import mlflow
 from .cli import cli
-from .utils.mlflow_tracking import init_mlflow
+from .utils.mlflow_tracking import (
+    get_mlflow_client, 
+    load_parent_run_id,
+    create_child_run,
+    terminate_run
+)
+from mlflow.tracking import MlflowClient
 import dvc.api
 
 # Configure logging
@@ -16,7 +21,9 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 class AudioConcatenator:
-    def __init__(self, input_folder, output_folder, metadata_path, target_duration=1800, tolerance=180):
+    def __init__(self, input_folder, output_folder, metadata_path, 
+                 client: MlflowClient, run_id: str,
+                 target_duration=1800, tolerance=180):
         # Initialize with input/output folders, metadata path, and duration settings
         self.input_folder = Path(input_folder)
         self.output_folder = Path(output_folder)
@@ -26,13 +33,12 @@ class AudioConcatenator:
         self.min_duration = target_duration - tolerance
         self.max_duration = target_duration + tolerance
         self.output_folder.mkdir(exist_ok=True)  # Create output folder if it doesn't exist
-        
+        self.client = client
+        self.run_id = run_id
+
         # Log initialization parameters
-        mlflow.log_param("input_folder", str(input_folder))
-        mlflow.log_param("output_folder", str(output_folder))
-        mlflow.log_param("metadata_path", str(metadata_path))
-        mlflow.log_param("target_duration", target_duration)
-        mlflow.log_param("tolerance", tolerance)
+        self.client.log_metric(run_id=self.run_id, key="target_duration", value=target_duration)
+        self.client.log_metric(run_id=self.run_id, key="tolerance", value=tolerance)
 
     def load_metadata(self):
         # Load metadata from CSV file
@@ -45,7 +51,7 @@ class AudioConcatenator:
             return df
         except Exception as e:
             logger.error(f"Error loading metadata from {self.metadata_path}: {e}")
-            mlflow.log_metric("metadata_load_errors", 1)
+            self.client.log_metric(run_id=self.run_id, key="metadata_load_errors", value=1)
             raise
 
     def concatenate_files(self):
@@ -63,7 +69,7 @@ class AudioConcatenator:
 
             if not file_path.exists():
                 logger.warning(f"File {filename} not found, skipping.")
-                mlflow.log_metric("missing_files", 1)
+                self.client.log_metric(run_id=self.run_id, key="missing_files", value=1)
                 continue
 
             # Check if file fits in current segment
@@ -87,7 +93,7 @@ class AudioConcatenator:
             self.save_segment(current_segment, segment_count)
         
         # Log total segments created
-        mlflow.log_metric("total_segments_created", segment_count)
+        self.client.log_metric(run_id=self.run_id, key="total_segments_created", value=segment_count)
 
     def save_segment(self, file_paths, segment_count):
         # Save concatenated segment to file
@@ -108,12 +114,13 @@ class AudioConcatenator:
             logger.info(f"Saved segment {segment_count}: {output_path} (duration {len(combined_audio) / sr:.2f} sec)")
             
             # Log segment duration and file as artifact
-            mlflow.log_metric(f"segment_{segment_count}_duration", len(combined_audio) / sr)
-            mlflow.log_artifact(str(output_path))
+            segment_duration = len(combined_audio) / sr
+            self.client.log_metric(run_id=self.run_id, key=f"segment_{segment_count}_duration", value=segment_duration)
+            self.client.log_artifact(self.run_id, str(output_path))
         
         except Exception as e:
             logger.error(f"Error saving segment {segment_count}: {e}")
-            mlflow.log_metric("segment_save_errors", 1)
+            self.client.log_metric(run_id=self.run_id, key="segment_save_errors", value=1)
             raise
 
     def process(self):
@@ -131,19 +138,34 @@ class AudioConcatenator:
               help="Path to CSV file with metadata")
 def concatenate_audio(input_folder, output_folder, metadata_path):
     """Concatenate WAV files into segments based on target duration and metadata."""
-    # Initialize MLflow tracking
-    init_mlflow()
+    # Connect to MLflow client
+    client = get_mlflow_client()  
 
-    # Fetch parameters from DVC
-    params = dvc.api.params_show()
-    target_duration = params["concat_duration"]
-    tolerance = params["concat_tolerance"]
+    # Load parent run_id
+    parent_run_id = load_parent_run_id()
     
-    print(f"Target duration: {target_duration} seconds")
-    print(f"Tolerance: {tolerance} seconds")
+    try:
+        # Create child run for this stage
+        child_run_id = create_child_run(client, parent_run_id, "concatenating_segments")
+        
+        # Fetch parameters from DVC
+        params = dvc.api.params_show()
+        target_duration = params["concat_duration"]
+        tolerance = params["concat_tolerance"]
+        
+        print(f"Target duration: {target_duration} seconds")
+        print(f"Tolerance: {tolerance} seconds")
+        
+        # Initialize concatenator and process files
+        concatenator = AudioConcatenator(input_folder, output_folder, metadata_path, 
+                                         client, child_run_id,
+                                         target_duration, tolerance)
+        concatenator.process()
+        
+        click.echo(f"Concatenation complete. Results saved in {output_folder}")
     
-    # Initialize concatenator and process files
-    concatenator = AudioConcatenator(input_folder, output_folder, metadata_path, target_duration, tolerance)
-    concatenator.process()
-    
-    click.echo(f"Concatenation complete. Results saved in {output_folder}")
+    except Exception as e:
+        raise RuntimeError(f"An error occurred: {e}")
+    finally:
+        # Terminate child run
+        terminate_run(client, child_run_id)

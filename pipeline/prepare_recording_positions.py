@@ -3,26 +3,29 @@ import pandas as pd
 from pathlib import Path
 import logging
 import click
-import mlflow
 from .cli import cli
-from .utils.mlflow_tracking import init_mlflow
+from .utils.mlflow_tracking import (
+    get_mlflow_client, 
+    load_parent_run_id,
+    create_child_run,
+    terminate_run
+)
+from mlflow.tracking import MlflowClient
+
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 class AudioLabelGenerator:
-    def __init__(self, input_folder, output_folder, metadata_path):
+    def __init__(self, input_folder, output_folder, metadata_path, client: MlflowClient, run_id: str):
         # Initialize with input/output folders and metadata path
         self.input_folder = Path(input_folder)
         self.output_folder = Path(output_folder)
         self.metadata_path = Path(metadata_path)
         self.output_folder.mkdir(parents=True, exist_ok=True)  # Create output folder if it doesn't exist
-        
-        # Log initialization parameters
-        mlflow.log_param("input_folder", str(input_folder))
-        mlflow.log_param("output_folder", str(output_folder))
-        mlflow.log_param("metadata_path", str(metadata_path))
+        self.client = client
+        self.run_id = run_id
 
     def load_metadata(self):
         # Load metadata from CSV file
@@ -35,7 +38,7 @@ class AudioLabelGenerator:
             return df
         except Exception as e:
             logger.error(f"Error loading metadata from {self.metadata_path}: {e}")
-            mlflow.log_metric("metadata_load_errors", 1)
+            self.client.log_metric(run_id=self.run_id, key="metadata_load_errors", value=1)
             raise
 
     def generate_labels(self):
@@ -67,7 +70,7 @@ class AudioLabelGenerator:
             self.save_labels(current_segment_labels, segment_count)
         
         # Log total segments created
-        mlflow.log_metric("total_segments_created", segment_count)
+        self.client.log_metric(run_id=self.run_id, key="total_segments_created", value=segment_count)
 
     def save_labels(self, labels, segment_count):
         # Save labels to a text file
@@ -77,10 +80,10 @@ class AudioLabelGenerator:
                 for start_time, end_time, filename in labels:
                     f.write(f"{start_time:.3f}\t{end_time:.3f}\t{filename}\n")
             logger.info(f"Saved labels file: {output_path}")
-            mlflow.log_artifact(str(output_path))
+            self.client.log_artifact(self.run_id, str(output_path))
         except Exception as e:
             logger.error(f"Error saving labels for segment {segment_count}: {e}")
-            mlflow.log_metric("label_save_errors", 1)
+            self.client.log_metric(run_id=self.run_id, key="label_save_errors", value=1)
             raise
 
     def process(self):
@@ -98,11 +101,25 @@ class AudioLabelGenerator:
               help="Path to CSV file with metadata")
 def generate_labels(input_folder, output_folder, metadata_path):
     """Generate label files for WAV segments based on metadata."""
-    # Initialize MLflow tracking
-    init_mlflow()
+    # Connect to MLflow client
+    client = get_mlflow_client()  
+
+    # Load parent run_id
+    parent_run_id = load_parent_run_id()
     
-    # Initialize label generator and process
-    label_generator = AudioLabelGenerator(input_folder, output_folder, metadata_path)
-    label_generator.process()
+    try:
+        # Create child run for this stage
+        child_run_id = create_child_run(client, parent_run_id, "preparing_recording_positions")
     
-    click.echo(f"Label generation complete. Results saved in {output_folder}")
+        # Initialize label generator and process
+        label_generator = AudioLabelGenerator(input_folder, output_folder, metadata_path, 
+                                              client, child_run_id)
+        label_generator.process()
+        
+        click.echo(f"Label generation complete. Results saved in {output_folder}")
+    
+    except Exception as e:
+        raise RuntimeError(f"An error occurred: {e}")
+    finally:
+        # Terminate child run
+        terminate_run(client, child_run_id)

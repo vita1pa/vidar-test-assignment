@@ -7,10 +7,16 @@ from scipy import signal
 import matplotlib.pyplot as plt
 import logging
 import click
+from .utils.mlflow_tracking import (
+    get_mlflow_client, 
+    load_parent_run_id,
+    create_child_run,
+    terminate_run
+)
+from mlflow.tracking import MlflowClient
 import mlflow
 from datetime import datetime
 from .cli import cli
-from .utils.mlflow_tracking import init_mlflow
 import dvc.api
 
 # Configure logging
@@ -18,19 +24,21 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 class AudioHighPassFilter:
-    def __init__(self, input_folder, output_folder, cutoff_freq=20, sample_rate=16000):
+    def __init__(self, input_folder, output_folder, 
+                 client: MlflowClient, run_id: str, 
+                 cutoff_freq=20, sample_rate=16000):
         # Initialize with input/output folders, cutoff frequency, and sampling rate
         self.input_folder = Path(input_folder)
         self.output_folder = Path(output_folder)
         self.cutoff_freq = cutoff_freq
         self.sample_rate = sample_rate
         self.output_folder.mkdir(exist_ok=True)  # Create output folder if it doesn't exist
-        
-        # Log initialization parameters
-        mlflow.log_param("input_folder", str(input_folder))
-        mlflow.log_param("output_folder", str(output_folder))
-        mlflow.log_param("cutoff_frequency", cutoff_freq)
-        mlflow.log_param("sample_rate", sample_rate)
+        self.client = client
+        self.run_id = run_id
+
+        # Log parameters
+        self.client.log_metric(run_id=self.run_id, key="cutoff_frequency", value=cutoff_freq)
+        self.client.log_metric(run_id=self.run_id, key="sample_rate", value=sample_rate)
 
     def apply_highpass_filter(self, audio, sr):
         # Apply high-pass filter to audio data
@@ -109,7 +117,7 @@ class AudioHighPassFilter:
 
         except Exception as e:
             logger.error(f"Error processing file {file_path}: {e}")
-            mlflow.log_metric("filter_errors", 1)
+            self.client.log_metric(run_id=self.run_id, key="filter_errors", value=1)
             return None
 
     def process_folder(self, plot_spectrogram_for_first=False):
@@ -126,9 +134,9 @@ class AudioHighPassFilter:
                 first_file = False
         
         # Log total files processed and success rate
-        mlflow.log_metric("total_files_processed", total_files)
+        self.client.log_metric(run_id=self.run_id, key="total_files_processed", value=total_files)
         success_rate = len(results) / total_files if total_files > 0 else 0
-        mlflow.log_metric("success_rate", success_rate)
+        self.client.log_metric(run_id=self.run_id, key="success_rate", value=success_rate)
         
         return results
 
@@ -141,30 +149,43 @@ class AudioHighPassFilter:
               help="Generate spectrograms for the first file")
 def highpass_filter(input_folder, output_folder, plot_spectrogram):
     """Apply high-pass filter to WAV files and optionally generate spectrograms."""
-    # Initialize MLflow tracking
-    init_mlflow()
+    # Connect to MLflow client
+    client = get_mlflow_client()  
 
-    # Fetch parameters from DVC
-    params = dvc.api.params_show()
-    cutoff_freq = params["cutoff_freq"]  # No fallback, assume it's defined in params.yaml
-    sample_rate = params["target_sr"]    # No fallback, assume it's defined in params.yaml
+    # Load parent run_id
+    parent_run_id = load_parent_run_id()
     
-    print(f"Cutoff frequency: {cutoff_freq} Hz")
-    print(f"Sample rate: {sample_rate} Hz")
-    
-    # Initialize high-pass filter and process files
-    highpass_filter = AudioHighPassFilter(input_folder, output_folder, cutoff_freq, sample_rate)
-    results = highpass_filter.process_folder(plot_spectrogram_for_first=plot_spectrogram)
+    try:
+        # Create child run for this stage
+        child_run_id = create_child_run(client, parent_run_id, "filtering_outdoor")
 
-    # Print results
-    for result in results:
-        click.echo(f"File: {result['filename']}")
-        click.echo(f"  Original sampling rate: {result['original_sr']} Hz")
-        click.echo(f"  Cutoff frequency: {result['cutoff_freq']} Hz")
-        click.echo(f"  Mean amplitude (0-100 Hz): before={result['original_low_freq_amplitude']:.2f}, after={result['filtered_low_freq_amplitude']:.2f}")
-        click.echo(f"  Saved to: {result['output_path']}")
-    
-    click.echo(f"Processing complete. {len(results)} files filtered successfully.")
+        # Fetch parameters from DVC
+        params = dvc.api.params_show()
+        cutoff_freq = params["cutoff_freq"]  # No fallback, assume it's defined in params.yaml
+        sample_rate = params["target_sr"]    # No fallback, assume it's defined in params.yaml
+        
+        print(f"Cutoff frequency: {cutoff_freq} Hz")
+        print(f"Sample rate: {sample_rate} Hz")
+        
+        # Initialize high-pass filter and process files
+        highpass_filter = AudioHighPassFilter(input_folder, output_folder, client, child_run_id, 
+                                              cutoff_freq, sample_rate)
+        results = highpass_filter.process_folder(plot_spectrogram_for_first=plot_spectrogram)
+
+        # Print results
+        for result in results:
+            click.echo(f"File: {result['filename']}")
+            click.echo(f"  Original sampling rate: {result['original_sr']} Hz")
+            click.echo(f"  Cutoff frequency: {result['cutoff_freq']} Hz")
+            click.echo(f"  Mean amplitude (0-100 Hz): before={result['original_low_freq_amplitude']:.2f}, after={result['filtered_low_freq_amplitude']:.2f}")
+            click.echo(f"  Saved to: {result['output_path']}")
+        
+        click.echo(f"Processing complete. {len(results)} files filtered successfully.")
+    except Exception as e:
+        raise RuntimeError(f"An error occurred: {e}")
+    finally:
+        # Terminate child run
+        terminate_run(client, child_run_id)
 
 
 if __name__ == "__main__":

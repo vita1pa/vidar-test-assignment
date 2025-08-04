@@ -4,9 +4,14 @@ from pathlib import Path
 import logging
 from tqdm import tqdm
 import click
-import mlflow
 from .cli import cli
-from .utils.mlflow_tracking import init_mlflow
+from .utils.mlflow_tracking import (
+    get_mlflow_client, 
+    load_parent_run_id,
+    create_child_run,
+    terminate_run
+)
+from mlflow.tracking import MlflowClient
 import dvc.api
 
 # Configure logging
@@ -14,19 +19,21 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 class SpeechLabeler:
-    def __init__(self, input_folder, output_folder, threshold=0.5, frame_step=512 / 16000):
+    def __init__(self, input_folder, output_folder, 
+                 client: MlflowClient, run_id: str,
+                 threshold=0.5, frame_step=512 / 16000):
         # Initialize with input/output folders, probability threshold, and frame step
         self.input_folder = Path(input_folder)
         self.output_folder = Path(output_folder)
         self.threshold = threshold
         self.frame_step = frame_step
         self.output_folder.mkdir(parents=True, exist_ok=True)
+        self.client = client
+        self.run_id = run_id
         
-        # Log initialization parameters
-        mlflow.log_param("input_folder", str(input_folder))
-        mlflow.log_param("output_folder", str(output_folder))
-        mlflow.log_param("threshold", threshold)
-        mlflow.log_param("frame_step", frame_step)
+        # Log parameters
+        self.client.log_metric(run_id=self.run_id, key="threshold", value=threshold)
+        self.client.log_metric(run_id=self.run_id, key="frame_step", value=frame_step)
 
     def create_labels(self, probabilities):
         # Create labels based on speech probabilities
@@ -52,7 +59,7 @@ class SpeechLabeler:
             labels.append((start_time, end_time, "speech"))
 
         # Log number of detected speech segments
-        mlflow.log_metric("speech_segments_detected", len(labels))
+        self.client.log_metric(run_id=self.run_id, key="speech_segments_detected", value=len(labels))
         
         return labels
 
@@ -64,7 +71,7 @@ class SpeechLabeler:
                 data = json.load(f)
                 if isinstance(data, dict) and "error" in data:
                     logger.error(f"Error in data {json_path}: {data['error']}")
-                    mlflow.log_metric("json_load_errors", 1)
+                    self.client.log_metric(run_id=self.run_id, key="json_load_errors", value=1)
                     return
                 logger.info(f"Data structure: list with {len(data)} nested elements")
 
@@ -76,12 +83,12 @@ class SpeechLabeler:
                 for start, end, label in labels:
                     f.write(f"{start:.3f}\t{end:.3f}\t{label}\n")
             logger.info(f"Saved labels: {output_path} (number of segments: {len(labels)})")
-            mlflow.log_artifact(str(output_path))
-            mlflow.log_metric("successful_label_files", 1)
+            self.client.log_artifact(self.run_id, str(output_path))
+            self.client.log_metric(run_id=self.run_id, key="successful_label_files", value=1)
         
         except Exception as e:
             logger.error(f"Error processing {json_path}: {e}")
-            mlflow.log_metric("label_processing_errors", 1)
+            self.client.log_metric(run_id=self.run_id, key="label_processing_errors", value=1)
 
     def process(self):
         # Process all JSON files
@@ -93,9 +100,9 @@ class SpeechLabeler:
             self.process_file(json_path)
         
         # Log total files processed and success rate
-        mlflow.log_metric("total_files_processed", total_files)
-        success_rate = (total_files - mlflow.active_run().data.metrics.get("label_processing_errors", 0)) / total_files if total_files > 0 else 0
-        mlflow.log_metric("success_rate", success_rate)
+        self.client.log_metric(run_id=self.run_id, key="total_files_processed", value=total_files)
+        success_rate = (total_files - self.client.get_run(self.run_id).data.metrics.get("label_processing_errors", 0)) / total_files if total_files > 0 else 0
+        self.client.log_metric(run_id=self.run_id, key="success_rate", value=success_rate)
         
         logger.info(f"Label creation complete. Results saved in {self.output_folder}")
 
@@ -106,19 +113,32 @@ class SpeechLabeler:
               help="Output directory for label files")
 def label_speech(input_folder, output_folder):
     """Generate speech labels from probability JSON files."""
-    # Initialize MLflow tracking
-    init_mlflow()
+    # Connect to MLflow client
+    client = get_mlflow_client()  
 
-    # Fetch parameters from DVC
-    params = dvc.api.params_show()
-    threshold = params["prob_threshold"]
-    frame_step = params["frame_step"]
+    # Load parent run_id
+    parent_run_id = load_parent_run_id()
     
-    print(f"Probability threshold: {threshold}")
-    print(f"Frame step: {frame_step} seconds")
-    
-    # Initialize labeler and process files
-    labeler = SpeechLabeler(input_folder, output_folder, threshold, frame_step)
-    labeler.process()
-    
-    click.echo(f"Label creation complete. Results saved in {output_folder}")
+    try:
+        # Create child run for this stage
+        child_run_id = create_child_run(client, parent_run_id, "preparing_speech_labels")
+
+        # Fetch parameters from DVC
+        params = dvc.api.params_show()
+        threshold = params["prob_threshold"]
+        frame_step = params["frame_step"]
+        
+        print(f"Probability threshold: {threshold}")
+        print(f"Frame step: {frame_step} seconds")
+        
+        # Initialize labeler and process files
+        labeler = SpeechLabeler(input_folder, output_folder, client, child_run_id, threshold, frame_step)
+        labeler.process()
+        
+        click.echo(f"Label creation complete. Results saved in {output_folder}")
+
+    except Exception as e:
+        raise RuntimeError(f"An error occurred: {e}")
+    finally:
+        # Terminate child run
+        terminate_run(client, child_run_id)

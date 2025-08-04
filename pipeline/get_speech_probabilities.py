@@ -7,25 +7,29 @@ from pathlib import Path
 import logging
 from tqdm import tqdm
 import click
-import mlflow
 from .cli import cli
-from .utils.mlflow_tracking import init_mlflow
+from .utils.mlflow_tracking import (
+    get_mlflow_client, 
+    load_parent_run_id,
+    create_child_run,
+    terminate_run
+)
+from mlflow.tracking import MlflowClient
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', filename='speech_detection.log', filemode='w')
 logger = logging.getLogger(__name__)
 
 class SpeechDetector:
-    def __init__(self, input_folder, output_folder):
+    def __init__(self, input_folder, output_folder, client: MlflowClient, run_id: str):
         # Initialize with input/output folders
         self.input_folder = Path(input_folder)
         self.output_folder = Path(output_folder)
         self.output_folder.mkdir(parents=True, exist_ok=True)
         self.model, _ = torch.hub.load('snakers4/silero-vad', 'silero_vad', force_reload=False)
+        self.client = client
+        self.run_id = run_id
         
-        # Log initialization parameters
-        mlflow.log_param("input_folder", str(input_folder))
-        mlflow.log_param("output_folder", str(output_folder))
 
     def detect_speech(self, audio_path):
         # Detect speech in an audio file and return probabilities for each chunk
@@ -37,7 +41,7 @@ class SpeechDetector:
             
             # Log audio duration
             audio_duration = len(audio) / sr
-            mlflow.log_metric(f"audio_duration_{audio_path.name}", audio_duration)
+            self.client.log_metric(run_id=self.run_id, key=f"audio_duration_{audio_path.name}", value=audio_duration)
 
             # Normalize audio to avoid clipping
             if np.max(np.abs(audio)) > 0:
@@ -62,12 +66,12 @@ class SpeechDetector:
             probabilities = probabilities.tolist()  # Convert tensor to list
             
             logger.info(f"Processing complete, obtained {len(probabilities)} probabilities")
-            mlflow.log_metric("successful_detections", 1)
+            self.client.log_metric(run_id=self.run_id, key="successful_detections", value=1)
             return audio_path.name, probabilities
 
         except Exception as e:
             logger.error(f"Error processing {audio_path}: {e}")
-            mlflow.log_metric("detection_errors", 1)
+            self.client.log_metric(run_id=self.run_id, key="detection_errors", value=1)
             return audio_path.name, [str(e)]
 
     def process(self):
@@ -87,12 +91,12 @@ class SpeechDetector:
                 with open(output_path, 'w') as f:
                     json.dump(result, f, indent=2)
                 logger.info(f"Saved probabilities: {output_path} (length: {len(result)})")
-                mlflow.log_artifact(str(output_path))
+                self.client.log_artifact(self.run_id, str(output_path))
         
         # Log total files processed and success rate
-        mlflow.log_metric("total_files_processed", total_files)
-        success_rate = (total_files - mlflow.active_run().data.metrics.get("detection_errors", 0)) / total_files if total_files > 0 else 0
-        mlflow.log_metric("success_rate", success_rate)
+        self.client.log_metric(run_id=self.run_id, key="total_files_processed", value=total_files)
+        success_rate = (total_files - self.client.get_run(self.run_id).data.metrics.get("detection_errors", 0)) / total_files if total_files > 0 else 0
+        self.client.log_metric(run_id=self.run_id, key="success_rate", value=success_rate)
         
         logger.info(f"Speech detection complete. Results saved in {self.output_folder}")
 
@@ -103,11 +107,24 @@ class SpeechDetector:
               help="Output directory for speech probability JSON files")
 def detect_speech(input_folder, output_folder):
     """Detect speech in WAV segments and save probabilities as JSON files."""
-    # Initialize MLflow tracking
-    init_mlflow()
+    # Connect to MLflow client
+    client = get_mlflow_client()  
+
+    # Load parent run_id
+    parent_run_id = load_parent_run_id()
     
-    # Initialize detector and process files
-    detector = SpeechDetector(input_folder, output_folder)
-    detector.process()
+    try:
+        # Create child run for this stage
+        child_run_id = create_child_run(client, parent_run_id, "getting_speech_probabilities")
     
-    click.echo(f"Speech detection complete. Results saved in {output_folder}")
+        # Initialize detector and process files
+        detector = SpeechDetector(input_folder, output_folder, client, child_run_id)
+        detector.process()
+        
+        click.echo(f"Speech detection complete. Results saved in {output_folder}")
+
+    except Exception as e:
+        raise RuntimeError(f"An error occurred: {e}")
+    finally:
+        # Terminate child run
+        terminate_run(client, child_run_id)

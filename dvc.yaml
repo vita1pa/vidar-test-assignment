@@ -1,4 +1,9 @@
 stages:
+  initializating_mlflow:
+    cmd: python pipeline/utils/mlflow_tracking.py
+    outs:
+      - parent_run_id.json
+
   decoding_xml_to_wav:
     cmd: python -m pipeline process-xml-files 
       --input-folder data/xml_input 
